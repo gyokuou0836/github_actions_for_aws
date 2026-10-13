@@ -1,0 +1,61 @@
+name: deploy
+
+on:
+  push:
+    branches: [deploy_dev, deploy_stg]   # 将来 deploy_prod を追加
+    paths: ["cfn/**", "scripts/**", ".github/workflows/deploy.yml"]
+  pull_request:
+    branches: [deploy_dev, deploy_stg]
+    paths: ["cfn/**"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install cfn-lint
+      - name: Lint CloudFormation templates
+        run: cfn-lint cfn/s3-bucket.yaml
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # 手動実行は選択値、pushはブランチから環境を決定
+    environment: ${{ inputs.environment || (github.ref_name == 'deploy_stg' && 'staging') || 'dev' }}
+    env:
+      TARGET_ENV: ${{ inputs.environment || (github.ref_name == 'deploy_stg' && 'staging') || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install boto3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy stack
+        run: |
+          python scripts/deploy.py \
+            --stack-name "s3-practice-${TARGET_ENV}" \
+            --template cfn/s3-bucket.yaml \
+            --param "BucketName=${{ vars.BUCKET_NAME }}" \
+            --param "Environment=${TARGET_ENV}"
