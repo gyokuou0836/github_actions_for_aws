@@ -1,0 +1,50 @@
+name: deploy-dev
+
+on:
+  push:
+    branches: [deploy_dev]   # PRをdeploy_devへMergeした時に実行
+    paths: ["cfn/**", "scripts/**", ".github/workflows/deploy-dev.yml"]
+  pull_request:
+    branches: [deploy_dev]
+    paths: ["cfn/**"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  STACK_NAME: s3-practice-dev
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: aws cloudformation validate-template --template-body file://cfn/s3-bucket.yaml
+
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install boto3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy stack
+        run: |
+          python scripts/deploy.py \
+            --stack-name "$STACK_NAME" \
+            --template cfn/s3-bucket.yaml \
+            --param "BucketName=${{ vars.BUCKET_NAME }}" \
+            --param Environment=dev
