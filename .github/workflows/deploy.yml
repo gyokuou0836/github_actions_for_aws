@@ -55,17 +55,17 @@ jobs:
           if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
             echo "=== OIDC Token Header & Payload (signature omitted) ==="
             python3 -c "
-import sys, json, base64
-t = sys.argv[1]
-parts = t.split('.')
-def pad(b): return b + '=' * (-len(b) % 4)
-header = json.loads(base64.urlsafe_b64decode(pad(parts[0])))
-payload = json.loads(base64.urlsafe_b64decode(pad(parts[1])))
-print('Header:', json.dumps(header))
-# 重要なクレームのみ出力
-for k in ['iss', 'aud', 'sub', 'repository', 'environment', 'ref', 'actor']:
-    print(f'  {k}: {payload.get(k)}')
-" "$TOKEN"
+          import sys, json, base64
+          t = sys.argv[1]
+          parts = t.split('.')
+          def pad(b): return b + '=' * (-len(b) % 4)
+          header = json.loads(base64.urlsafe_b64decode(pad(parts[0])))
+          payload = json.loads(base64.urlsafe_b64decode(pad(parts[1])))
+          print('Header:', json.dumps(header))
+          # 重要なクレームのみ出力
+          for k in ['iss', 'aud', 'sub', 'repository', 'environment', 'ref', 'actor']:
+              print(f'  {k}: {payload.get(k)}')
+          " "$TOKEN"
           fi
 
       - uses: aws-actions/configure-aws-credentials@v4
