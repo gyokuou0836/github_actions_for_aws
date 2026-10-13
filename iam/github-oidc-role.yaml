@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  GitHub OIDC provider and deploy role. Must be deployed ONCE by an admin user
+  (ntcs-wan has no IAM permissions).
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: gyokuou0836/github_actions_for_aws
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: GitHub Environment name (one role per environment)
+  BucketNamePrefix:
+    Type: String
+    Default: ntcs-wan-s3-practice
+    Description: Practice buckets must be named with this prefix
+  LocalUserName:
+    Type: String
+    Default: ntcs-wan
+    Description: IAM user allowed to assume the role for local testing
+  CreateOidcProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Set false if token.actions.githubusercontent.com provider already exists
+
+Conditions:
+  CreateProvider: !Equals [!Ref CreateOidcProvider, 'true']
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub github-actions-s3-practice-deploy-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepo}:environment:${EnvironmentName}
+                  - !Sub repo:${GitHubRepo}:pull_request
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${LocalUserName}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: s3-practice-deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplate
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/s3-practice-${EnvironmentName}/*
+              - Effect: Allow
+                Action: cloudformation:ValidateTemplate
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:PutBucketVersioning
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutBucketTagging
+                  - s3:Get*
+                  - s3:ListBucket
+                Resource: !Sub arn:${AWS::Partition}:s3:::${BucketNamePrefix}*
+
+Outputs:
+  RoleArn:
+    Description: Set this as GitHub Secret AWS_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn
