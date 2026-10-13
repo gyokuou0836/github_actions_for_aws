@@ -29,7 +29,7 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
      --parameter-overrides EnvironmentName=dev
    ```
    出力 `RoleArn` を控える。
-   既存のロールが旧形式の `sub`（`repo:<owner>/<repository>:environment:<環境名>`）を信頼している場合は、このテンプレートでスタックを更新するか、ロールの信頼ポリシーを新しい `sub` 形式に更新する。
+   既存のロールが旧形式の `sub`（`repo:<owner>/<repository>:environment:<環境名>`）を信頼している場合、このリポジトリのように GitHub が immutable ID 形式の `sub` を発行していることを確認してから、このテンプレートでスタックを更新する。immutable subject に移行していない既存リポジトリは引き続き旧形式を発行するため、先に GitHub 側で移行するか、移行中は両形式を信頼してから旧形式を削除する。
 2. GitHub: Settings → Environments で `dev` / `staging` / `prod` を作成
    - Environment secrets: `AWS_ROLE_ARN`（その環境のRoleArn）
    - Environment variables: `BUCKET_NAME`（`ntcs-wan-s3-practice` で始める）
