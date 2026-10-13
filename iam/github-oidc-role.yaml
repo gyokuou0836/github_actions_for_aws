@@ -4,9 +4,20 @@ Description: >
   (ntcs-wan has no IAM permissions).
 
 Parameters:
-  GitHubRepo:
+  GitHubOwner:
     Type: String
-    Default: gyokuou0836/github_actions_for_aws
+    Default: gyokuou0836
+  GitHubOwnerId:
+    Type: String
+    Default: '5299457'
+    Description: Immutable GitHub owner ID included in the OIDC subject
+  GitHubRepository:
+    Type: String
+    Default: github_actions_for_aws
+  GitHubRepositoryId:
+    Type: String
+    Default: '1416525375'
+    Description: Immutable GitHub repository ID included in the OIDC subject
   EnvironmentName:
     Type: String
     Default: dev
@@ -53,9 +64,8 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
                 token.actions.githubusercontent.com:sub:
-                  - !Sub repo:${GitHubRepo}:environment:${EnvironmentName}
+                  - !Sub repo:${GitHubOwner}@${GitHubOwnerId}/${GitHubRepository}@${GitHubRepositoryId}:environment:${EnvironmentName}
           - Effect: Allow
             Principal:
               AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${LocalUserName}
