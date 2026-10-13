@@ -28,12 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # PRにはEnvironmentが無いため、リポジトリ共通のRepository secretを使う
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/setup-python@v5
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - run: aws cloudformation validate-template --template-body file://cfn/s3-bucket.yaml
+          python-version: "3.12"
+      - run: pip install cfn-lint
+      - name: Lint CloudFormation templates
+        run: cfn-lint cfn/s3-bucket.yaml
 
   deploy:
     if: github.event_name != 'pull_request'

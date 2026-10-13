@@ -16,10 +16,12 @@ def main():
     cfn = boto3.client("cloudformation")
     with open(a.template, encoding="utf-8") as f:
         body = f.read()
-    params = [
-        {"ParameterKey": k, "ParameterValue": v}
-        for k, v in (s.split("=", 1) for s in a.param)
-    ]
+    params = []
+    for value in a.param:
+        key, separator, parameter_value = value.partition("=")
+        if not separator or not key:
+            p.error("--param must use a non-empty Key=Value format")
+        params.append({"ParameterKey": key, "ParameterValue": parameter_value})
 
     try:
         cfn.describe_stacks(StackName=a.stack_name)

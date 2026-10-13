@@ -18,7 +18,7 @@ GitHub Actions 練習用
 PR時は `validate` ジョブのみ（テンプレート検証）。
 
 ## 事前準備
-`ntcs-wan` にはIAM権限が無いため、ロールは管理者権限を持つ別ユーザーが作成する（Webコンソール手順でも可。信頼ポリシーの `sub` は `repo:gyokuou0836/github_actions_for_aws:environment:<環境名>` と `...:pull_request`）。
+`ntcs-wan` にはIAM権限が無いため、ロールは管理者権限を持つ別ユーザーが作成する（Webコンソール手順でも可。信頼ポリシーの `sub` は `repo:gyokuou0836/github_actions_for_aws:environment:<環境名>`）。
 
 1. 環境ごとにロール作成（OIDCプロバイダは最初の1回のみ作成。2回目以降は `CreateOidcProvider=false`）
    ```
@@ -33,7 +33,7 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
    - Environment secrets: `AWS_ROLE_ARN`（その環境のRoleArn）
    - Environment variables: `BUCKET_NAME`（`ntcs-wan-s3-practice` で始める）
    - Deployment branches: dev=`deploy_dev`、staging=`deploy_stg`、prod=承認者(Required reviewers)を設定推奨
-3. Repository secret `AWS_ROLE_ARN` に dev のRoleArnを設定（PRのテンプレート検証用）
+   ※PR時の検証は `cfn-lint` を使用するため、Repository Secretの登録は不要です。
 
 ## 流れ
 `feature/wangyu` で編集 → `deploy_dev` へPR → Merge → Actionsがdevスタックを更新
