@@ -4,6 +4,22 @@
 
 ---
 
+## 実施状況（2026-10-14 更新）
+
+**方法A は適用済みです。** 信頼ポリシーの `sub` が immutable 形式を信頼するよう更新され、
+`aws iam get-role` の実測で確認しました。
+
+| 項目 | 状態 |
+|---|---|
+| 信頼ポリシーの `sub` | ✅ 更新済み（`...@5299457/...@1416525375:environment:dev` / `...:staging` / 旧形式の 3 件） |
+| `aud` 条件・`sts:TagSession`・`ntcs-wan` の `sts:AssumeRole` 文 | ✅ 維持されていることを確認済み |
+| ロールの許可ポリシー | ✅ `github-actions-s3-practice-deploy-policy` のまま（インラインポリシー 0 件・再アタッチ不要） |
+| 残作業 | GitHub Actions の `deploy` を **Re-run** するだけ |
+
+> 以下の「提出用サマリ」以降は**実施前の依頼文面**として残しています（完了記録・再発時の雛形として利用可）。
+
+---
+
 ## 提出用サマリ（このブロックをそのままチケット／チャットへ貼り付け可）
 
 **【依頼】IAM ロール `github-actions-s3-practice-deploy` の信頼ポリシー修正**
@@ -18,6 +34,7 @@
 | 対象ロール | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` |
 | 依頼内容 | 信頼ポリシーの `token.actions.githubusercontent.com:sub` 条件を **immutable 形式**に更新（**変更は 1 箇所・所要 5 分**） |
 | 理由 | GitHub Actions のデプロイが `sts:AssumeRoleWithWebIdentity` で AccessDenied |
+| 証跡 | Actions ログの実測 `sub` が期待値と**一致**（`repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev`）。不一致は**信頼ポリシーの `sub` のみ**（`repo:gyokuou0836/github_actions_for_aws:*`） |
 | 代行不可の理由 | `ntcs-wan` は `NTCSDevGuardrailDenyPolicy`（`DenyTrustRelationshipTampering`）により `iam:UpdateAssumeRolePolicy` が Deny（詳細は下記「足りない権限の整理」） |
 | 実施方法 | 下記「修正手順 → 方法A」 |
 | 完了条件 | 下記「検証」のコマンドで immutable 形式の `sub` を確認 |
@@ -33,11 +50,25 @@
 | OIDC プロバイダ | `arn:aws:iam::646977526034:oidc-provider/token.actions.githubusercontent.com`（存在・`ClientIDList=[sts.amazonaws.com]`） |
 | デプロイロール | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` |
 | ロールにアタッチ済み | `github-actions-s3-practice-deploy-policy`（マネージドポリシー） |
-| このリポジトリが発行する `sub` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| このリポジトリが発行する `sub` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev`（**実測確認済み**: Actions の `Debug OIDC Token Claims` ステップの実トークン） |
 
 > ⚠️ 実ロール名は **環境サフィックス無し** の `github-actions-s3-practice-deploy` です。
 > `github-oidc-role.yaml` が作成する `github-actions-s3-practice-deploy-${EnvironmentName}` とは **別名**なので、
 > テンプレートを新規デプロイすると **別のロールが増える** 点に注意してください（下記「方法B」参照）。
+
+### `sub` の可変部分は「環境」だけ（ID は固定）
+
+`sub` の `@5299457`（**アカウント ID**）と `@1416525375`（**リポジトリ ID**）は GitHub が発行する
+**不変識別子**で、**環境・ブランチ・リネームでは変わりません**。変わるのは末尾の `environment:<env>` 部分だけです。
+
+| 環境 | `sub` |
+|---|---|
+| `dev` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| `staging` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:staging` |
+| （未追加）`prod` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:prod` |
+
+→ **環境を増やすときは、その環境の行を信頼ポリシーの配列に 1 行追加するだけ**で、ID の書き換えは不要です。
+ID が変わるのは**別アカウントへのリポジトリ移転（transfer）や fork** をした場合のみです。
 
 ## 足りない権限の整理（`ntcs-wan` が実施できない操作）
 
@@ -107,9 +138,22 @@
 
 ## 症状
 
+GitHub Actions の `deploy` ジョブが `aws-actions/configure-aws-credentials@v4` で失敗します（2026-10-14 実行分で実測）。
+
 ```
-Error: Not authorized to perform sts:AssumeRoleWithWebIdentity
+Error: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity
 ```
+
+| 実測した証跡 | 値 |
+|---|---|
+| トークンの `sub`（`Debug OIDC Token Claims` ステップ） | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| ワークフローが期待する `sub`（`Show Expected OIDC Subject` ステップ） | 上と **一致** |
+| 信頼ポリシーの `sub`（`aws iam get-role`） | `repo:gyokuou0836/github_actions_for_aws:*`（**不一致**） |
+
+→ OIDC プロバイダ（`aud=sts.amazonaws.com`）・Environment `dev`・Secret `AWS_ROLE_ARN`・ワークフローはすべて正常で、
+**信頼ポリシーの `sub` だけが原因**であることを確認済みです。
+
+> 2026-10-14 に信頼ポリシーが更新され、この不整合は**解消済み**です（上記「実施状況」参照）。
 
 ## 原因
 
@@ -119,7 +163,7 @@ Error: Not authorized to perform sts:AssumeRoleWithWebIdentity
 repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
 ```
 
-一方、デプロイロールの信頼ポリシーは旧形式のままでした。
+一方、デプロイロールの信頼ポリシーは**当時（修正前）は**旧形式のままでした。
 
 ```json
 {
@@ -128,6 +172,8 @@ repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
   }
 }
 ```
+
+> 上記は**修正前**の値です。現在は「実施状況」のとおり immutable 形式に更新済みで、`sub` は配列になっています。
 
 `StringLike` のパターンは `gyokuou0836` 直後の `/` と `github_actions_for_aws` 直後の `:`
 をリテラルとして要求するため、`@5299457` / `@1416525375` が入る実トークンには **マッチしません**。
