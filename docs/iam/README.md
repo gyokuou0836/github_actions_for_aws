@@ -2,6 +2,11 @@
 
 対象アカウント: **646977526034** / リージョン: **ap-northeast-1**
 
+> **このディレクトリは資料です**（`docs/iam/`）。デプロイワークフローからは参照されません。
+> `deploy.yml` / `scripts/deploy.py` が使うのは `cfn/s3-bucket.yaml` のみで、ここにあるテンプレートと
+> 手順は、`ntcs-wan` には実行できない（`NTCSDevGuardrailDenyPolicy` で Deny）管理者向けの
+> セットアップ手順および実施記録です。
+
 ---
 
 ## 実施状況（2026-10-14 更新）
@@ -264,7 +269,7 @@ repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
 ```bash
 aws cloudformation deploy --region ap-northeast-1 \
   --stack-name github-oidc-s3-practice-dev \
-  --template-file iam/github-oidc-role.yaml \
+  --template-file docs/iam/github-oidc-role.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentName=dev CreateOidcProvider=false
 ```
@@ -337,7 +342,7 @@ aws iam get-role --role-name github-actions-s3-practice-deploy \
 ## 参考: 今後ロールを新規作成する場合のひな形
 
 環境を追加する際にロールを新規作成するときも、`sub` は必ず **immutable 形式**（`@数値ID` 付き）で
-指定してください。本リポジトリの `iam/github-oidc-role.yaml` がそのまま正しい形です。
+指定してください。本リポジトリの `docs/iam/github-oidc-role.yaml` がそのまま正しい形です。
 
 | 設定項目 | 値 |
 |---|---|

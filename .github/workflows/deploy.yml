@@ -82,7 +82,7 @@ jobs:
             echo "  repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:${TARGET_ENV}"
           fi
           echo "  ※ 上の Debug ステップの sub と一致しない場合は sts:AssumeRoleWithWebIdentity が失敗します"
-          echo "  ※ 手順: iam/README.md"
+          echo "  ※ 手順: docs/iam/README.md"
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:

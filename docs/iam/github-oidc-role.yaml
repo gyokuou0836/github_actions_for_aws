@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  GitHub OIDC provider and deploy role. Must be deployed ONCE by an admin user
-  (ntcs-wan has no IAM permissions).
+  GitHub OIDC provider and deploy role. Reference template for creating a NEW
+  environment; the live role github-actions-s3-practice-deploy (no suffix) was
+  set up by an admin (ntcs-wan has no IAM permissions, see docs/iam/README.md).
 
 Parameters:
   GitHubOwner:
@@ -62,9 +63,10 @@ Resources:
   DeployRole:
     Type: AWS::IAM::Role
     Properties:
-      # 注意: 実環境 (646977526034) の既存ロールは環境サフィックス無しの
-      # `github-actions-s3-practice-deploy`。新規デプロイすると別ロールが増えるため
-      # GitHub の AWS_ROLE_ARN 更新が必要（iam/README.md 参照）。
+      # 注意: このテンプレートは「新規環境を作る場合の雛形」です。実環境 (646977526034) の
+      # 既存ロールは環境サフィックス無しの `github-actions-s3-practice-deploy` なので、
+      # このままデプロイすると別ロールが増え、GitHub の AWS_ROLE_ARN 更新が必要になります
+      # （docs/iam/README.md 参照）。
       RoleName: !Sub github-actions-s3-practice-deploy-${EnvironmentName}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'

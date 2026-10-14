@@ -5,8 +5,12 @@ GitHub Actions 練習用
 - `cfn/s3-bucket.yaml` : S3バケットのCloudFormationテンプレート
 - `scripts/deploy.py` : boto3によるスタック作成/更新
 - `.github/workflows/deploy.yml` : 環境別デプロイ
-- `iam/github-oidc-role.yaml` : OIDCプロバイダ + 環境別デプロイロール（管理者が実行）
-- `iam/README.md` : 管理者への修正依頼書（実環境のロール情報・信頼ポリシー修正手順・影響範囲）
+- `docs/iam/github-oidc-role.yaml` : OIDCプロバイダ + 環境別デプロイロール（管理者が実行）
+- `docs/iam/README.md` : 管理者への修正依頼書（実環境のロール情報・信頼ポリシー修正手順・影響範囲）
+
+`docs/iam/` 配下は**資料（セットアップ手順とその実施記録）**であり、デプロイからは参照しません
+（`deploy.yml` と `scripts/deploy.py` が使うのは `cfn/s3-bucket.yaml` です）。
+`ntcs-wan` には IAM 権限が無いため、ロールの作成・変更は管理者が**一度だけ**実施する作業です。
 
 ## 環境
 | GitHub Environment | トリガー | スタック名 |
@@ -25,11 +29,16 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
    ```
    aws cloudformation deploy --region ap-northeast-1 \
      --stack-name github-oidc-s3-practice-dev \
-     --template-file iam/github-oidc-role.yaml \
+     --template-file docs/iam/github-oidc-role.yaml \
      --capabilities CAPABILITY_NAMED_IAM \
      --parameter-overrides EnvironmentName=dev CreateOidcProvider=false
    ```
    出力 `RoleArn` を控える。
+   ※ このテンプレートは**新規環境を作る場合の雛形**です。作成されるロール名は
+   `github-actions-s3-practice-deploy-<環境名>` で、実環境で使用中の
+   `github-actions-s3-practice-deploy`（サフィックス無し）とは**別名**になります。
+   実環境は既に設定済みのため、このスタックを deploy すると未使用のロールが 1 つ増え、
+   GitHub 側の `AWS_ROLE_ARN` の差し替えが必要になります（`docs/iam/README.md` 参照）。
    既存のロールが旧形式の `sub`（`repo:<owner>/<repository>:environment:<環境名>`）を信頼している場合、このリポジトリのように GitHub が immutable ID 形式の `sub` を発行していることを確認してから、このテンプレートでスタックを更新する。immutable subject に移行していない既存リポジトリは引き続き旧形式を発行するため、先に GitHub 側で移行するか、移行中は両形式を信頼してから旧形式を削除する。
 2. GitHub: Settings → Environments で `dev` / `staging` / `prod` を作成
    - Environment secrets: `AWS_ROLE_ARN`（その環境のRoleArn）
@@ -176,7 +185,7 @@ curl -s https://api.github.com/repos/gyokuou0836/github_actions_for_aws | grep -
 
 ロールの信頼ポリシーが旧形式（`repo:gyokuou0836/github_actions_for_aws:*` など）のままだと
 `sub` が一致せず AssumeRole に失敗します。実環境のロール ARN・現在の信頼ポリシー・更新手順は
-[`iam/README.md`](iam/README.md) を参照してください。
+[`docs/iam/README.md`](docs/iam/README.md) を参照してください。
 
 > **2026-10-14 時点で信頼ポリシーは immutable 形式に更新済みです**（`aws iam get-role` で実測確認済み）。
 > Actions ログの実トークン `sub` と期待値が一致していることも確認済みで、**残作業は Actions の再実行のみ**です。
@@ -191,7 +200,7 @@ curl -s https://api.github.com/repos/gyokuou0836/github_actions_for_aws | grep -
 
 ### `Failed to create the changeset: ... AWS::EarlyValidation::ResourceExistenceCheck ... FAILED`
 
-`iam/github-oidc-role.yaml` を `cloudformation deploy` した際にこのエラーが出る場合、
+`docs/iam/github-oidc-role.yaml` を `cloudformation deploy` した際にこのエラーが出る場合、
 パラメータ `CreateOidcProvider` が既定値 `true` のままで、既存の OIDC プロバイダと
 **名前衝突**しています。`aws cloudformation describe-events` で次のように確認できます。
 
@@ -203,12 +212,12 @@ LogicalResourceId: GitHubOidcProvider (AWS::IAM::OIDCProvider)
 ```
 
 OIDC プロバイダはアカウントに 1 つしか作成できないため、既に存在する場合は
-`CreateOidcProvider=false` を指定します（`iam/README.md` の「方法B」も同様）。
+`CreateOidcProvider=false` を指定します（`docs/iam/README.md` の「方法B」も同様）。
 
 ```
 aws cloudformation deploy --region ap-northeast-1 \
   --stack-name github-oidc-s3-practice-dev \
-  --template-file iam/github-oidc-role.yaml \
+  --template-file docs/iam/github-oidc-role.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentName=dev CreateOidcProvider=false
 ```
@@ -238,10 +247,10 @@ aws cloudformation deploy --region ap-northeast-1 \
 | # | 依頼内容 | 根拠 |
 |---|---|---|
 | 1 | 既存ロール `github-actions-s3-practice-deploy` の信頼ポリシー更新（方法A） | `iam:UpdateAssumeRolePolicy` が Deny（`DenyTrustRelationshipTampering`） |
-| 2 | （任意）`github-oidc-role.yaml` によるロール作成（方法B） | `iam:CreateRole` ほか計 5 アクションが Deny／Allow 無し |
+| 2 | （任意）`docs/iam/github-oidc-role.yaml` によるロール作成（方法B） | `iam:CreateRole` ほか計 5 アクションが Deny／Allow 無し |
 
 必要なアクションの洗い出し・差分 JSON・影響範囲・検証手順は
-[`iam/README.md`](iam/README.md) の「提出用サマリ」「足りない権限の整理」にまとめてあります。
+[`docs/iam/README.md`](docs/iam/README.md) の「提出用サマリ」「足りない権限の整理」にまとめてあります。
 チケットには「提出用サマリ」のブロックをそのまま貼り付けられます。
 
 管理者側がコマンドで実施する場合（管理者が SSO の `AdministratorAccess` を使える場合）の例:
@@ -255,7 +264,7 @@ aws iam update-assume-role-policy --role-name github-actions-s3-practice-deploy 
 
 > `ntcs-wan` に権限を追加して解決する案は採りません。`NTCSDevGuardrailDenyPolicy` の
 > 条件なし Deny を緩める必要があり、本リポジトリの前提（権限分離の擬似）が崩れるためです
-> （詳細は `iam/README.md` の「`ntcs-wan` に権限を付与する案を採らない理由」を参照）。
+> （詳細は `docs/iam/README.md` の「`ntcs-wan` に権限を付与する案を採らない理由」を参照）。
 
 ### `Warning: Node.js 20 is deprecated`（deploy ジョブの末尾）
 
