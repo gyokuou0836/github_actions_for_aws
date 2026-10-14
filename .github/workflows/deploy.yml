@@ -68,6 +68,22 @@ jobs:
           " "$TOKEN"
           fi
 
+      - name: Show Expected OIDC Subject
+        env:
+          OWNER_ID: ${{ github.repository_owner_id }}
+          REPO_ID: ${{ github.repository_id }}
+        run: |
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          echo "=== 信頼ポリシーが必要とする sub (immutable subject) ==="
+          if [ -n "$OWNER_ID" ] && [ -n "$REPO_ID" ]; then
+            echo "  repo:${OWNER}@${OWNER_ID}/${REPO}@${REPO_ID}:environment:${TARGET_ENV}"
+          else
+            echo "  repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:${TARGET_ENV}"
+          fi
+          echo "  ※ 上の Debug ステップの sub と一致しない場合は sts:AssumeRoleWithWebIdentity が失敗します"
+          echo "  ※ 手順: iam/README.md"
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
