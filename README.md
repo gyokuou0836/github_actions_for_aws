@@ -6,6 +6,7 @@ GitHub Actions 練習用
 - `scripts/deploy.py` : boto3によるスタック作成/更新
 - `.github/workflows/deploy.yml` : 環境別デプロイ
 - `iam/github-oidc-role.yaml` : OIDCプロバイダ + 環境別デプロイロール（管理者が実行）
+- `iam/README.md` : 管理者への修正依頼書（実環境のロール情報・信頼ポリシー修正手順・影響範囲）
 
 ## 環境
 | GitHub Environment | トリガー | スタック名 |
@@ -38,3 +39,25 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
 
 ## 流れ
 `feature/wangyu` で編集 → `deploy_dev` へPR → Merge → Actionsがdevスタックを更新
+
+## トラブルシューティング
+
+### `Not authorized to perform sts:AssumeRoleWithWebIdentity`
+
+このリポジトリは GitHub OIDC の **immutable subject**（数値ID付き）を発行します。
+
+```
+repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
+```
+
+ロールの信頼ポリシーが旧形式（`repo:gyokuou0836/github_actions_for_aws:*` など）のままだと
+`sub` が一致せず AssumeRole に失敗します。実環境のロール ARN・現在の信頼ポリシー・更新手順は
+[`iam/README.md`](iam/README.md) を参照してください。
+
+> デプロイロールは `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy`（環境サフィックス無し）。
+> `ntcs-wan` は `NTCSDevGuardrailDenyPolicy` の `DenyTrustRelationshipTampering` により
+> `iam:UpdateAssumeRolePolicy` が Deny されているため、更新は管理者ユーザーで実施してください。
+>
+> ワークフローの「Debug OIDC Token Claims」「Show Expected OIDC Subject」ステップで、
+> 実際に発行された `sub` と信頼ポリシーが必要とする `sub` をログで比較できます
+> （切り分けが完了したら削除して構いません）。
