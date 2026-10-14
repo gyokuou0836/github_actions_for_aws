@@ -298,12 +298,18 @@ aws iam get-role --role-name github-actions-s3-practice-deploy \
 
 ## 依頼者側（リポジトリ管理者）の残タスク
 
-| # | 確認項目 | 期待値 |
-|---|---|---|
-| 1 | GitHub Environment `dev` の secret `AWS_ROLE_ARN` | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` |
-| 2 | リポジトリ（または `dev` Environment）の variable `BUCKET_NAME` | `ntcs-wan-s3-practice` で始まる名前であること（ロール権限の Resource が `arn:aws:s3:::ntcs-wan-s3-practice*` のため） |
-| 3 | 信頼ポリシー更新後に Actions `deploy` を **Re-run** | `configure-aws-credentials` が成功し、スタック `s3-practice-dev` が作成されること |
-| 4 | 切り分け用ステップの扱い | `deploy.yml` の「Debug OIDC Token Claims」「Show Expected OIDC Subject」は復旧確認後に削除可 |
+（2026-10-14 時点の結果を追記）
+
+| # | 確認項目 | 期待値 | 結果（2026-10-14） |
+|---|---|---|---|
+| 1 | GitHub Environment `dev` の secret `AWS_ROLE_ARN` | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` | ✅ 設定済み（ロール引受けに成功） |
+| 2 | リポジトリ（または `dev` Environment）の variable `BUCKET_NAME` | `ntcs-wan-s3-practice` で始まる名前であること（ロール権限の Resource が `arn:aws:s3:::ntcs-wan-s3-practice*` のため） | ✅ 実値 `ntcs-wan-s3-practice-wangyu-526034` |
+| 3 | 信頼ポリシー更新後に Actions `deploy` を **Re-run** | `configure-aws-credentials` が成功し、スタック `s3-practice-dev` が作成されること | ✅ 達成。[run 38504976470](https://github.com/gyokuou0836/github_actions_for_aws/actions/runs/38504976470) で `CREATE_COMPLETE`、再実行の [run 38508932886](https://github.com/gyokuou0836/github_actions_for_aws/actions/runs/38508932886) はバケット作成済みの状態で `No changes.` のまま success |
+| 4 | 切り分け用ステップの扱い | `deploy.yml` の「Debug OIDC Token Claims」「Show Expected OIDC Subject」は復旧確認後に削除可 | ⏸ **当面は削除しない**（下記のとおり判断） |
+
+> **#4 の判断**: 復旧直後のため、そのまま残しています。このステップが出力するのはヘッダーと主要クレームのみで、
+> 署名とトークン本体は出力しないためログに残っても安全です（上の「このリポジトリが発行する `sub`」の実測根拠にもなっています）。
+> 不要になった時点で削除するか、`workflow_dispatch` の入力で出し分ける形へ変更できます。
 
 ## 変更不要と確認済みの項目
 
