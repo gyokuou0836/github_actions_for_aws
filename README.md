@@ -93,9 +93,12 @@ repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
 `sub` が一致せず AssumeRole に失敗します。実環境のロール ARN・現在の信頼ポリシー・更新手順は
 [`iam/README.md`](iam/README.md) を参照してください。
 
+> **2026-10-14 時点で信頼ポリシーは immutable 形式に更新済みです**（`aws iam get-role` で実測確認済み）。
+> Actions ログの実トークン `sub` と期待値が一致していることも確認済みで、**残作業は Actions の再実行のみ**です。
+>
 > デプロイロールは `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy`（環境サフィックス無し）。
-> `ntcs-wan` は `NTCSDevGuardrailDenyPolicy` の `DenyTrustRelationshipTampering` により
-> `iam:UpdateAssumeRolePolicy` が Deny されているため、更新は管理者ユーザーで実施してください。
+> 更新時は `ntcs-wan` では `NTCSDevGuardrailDenyPolicy` の `DenyTrustRelationshipTampering` により
+> `iam:UpdateAssumeRolePolicy` が Deny されるため、管理者ユーザーに依頼してください。
 >
 > ワークフローの「Debug OIDC Token Claims」「Show Expected OIDC Subject」ステップで、
 > 実際に発行された `sub` と信頼ポリシーが必要とする `sub` をログで比較できます

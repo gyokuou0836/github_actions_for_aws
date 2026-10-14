@@ -4,6 +4,22 @@
 
 ---
 
+## 実施状況（2026-10-14 更新）
+
+**方法A は適用済みです。** 信頼ポリシーの `sub` が immutable 形式を信頼するよう更新され、
+`aws iam get-role` の実測で確認しました。
+
+| 項目 | 状態 |
+|---|---|
+| 信頼ポリシーの `sub` | ✅ 更新済み（`...@5299457/...@1416525375:environment:dev` / `...:staging` / 旧形式の 3 件） |
+| `aud` 条件・`sts:TagSession`・`ntcs-wan` の `sts:AssumeRole` 文 | ✅ 維持されていることを確認済み |
+| ロールの許可ポリシー | ✅ `github-actions-s3-practice-deploy-policy` のまま（インラインポリシー 0 件・再アタッチ不要） |
+| 残作業 | GitHub Actions の `deploy` を **Re-run** するだけ |
+
+> 以下の「提出用サマリ」以降は**実施前の依頼文面**として残しています（完了記録・再発時の雛形として利用可）。
+
+---
+
 ## 提出用サマリ（このブロックをそのままチケット／チャットへ貼り付け可）
 
 **【依頼】IAM ロール `github-actions-s3-practice-deploy` の信頼ポリシー修正**
@@ -123,6 +139,8 @@ Error: Could not assume role with OIDC: Not authorized to perform sts:AssumeRole
 → OIDC プロバイダ（`aud=sts.amazonaws.com`）・Environment `dev`・Secret `AWS_ROLE_ARN`・ワークフローはすべて正常で、
 **信頼ポリシーの `sub` だけが原因**であることを確認済みです。
 
+> 2026-10-14 に信頼ポリシーが更新され、この不整合は**解消済み**です（上記「実施状況」参照）。
+
 ## 原因
 
 リポジトリ側で **immutable subject claim が有効**なため、OIDC トークンの `sub` は数値 ID 付きになります。
@@ -131,7 +149,7 @@ Error: Could not assume role with OIDC: Not authorized to perform sts:AssumeRole
 repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
 ```
 
-一方、デプロイロールの信頼ポリシーは旧形式のままでした。
+一方、デプロイロールの信頼ポリシーは**当時（修正前）は**旧形式のままでした。
 
 ```json
 {
@@ -140,6 +158,8 @@ repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
   }
 }
 ```
+
+> 上記は**修正前**の値です。現在は「実施状況」のとおり immutable 形式に更新済みで、`sub` は配列になっています。
 
 `StringLike` のパターンは `gyokuou0836` 直後の `/` と `github_actions_for_aws` 直後の `:`
 をリテラルとして要求するため、`@5299457` / `@1416525375` が入る実トークンには **マッチしません**。
