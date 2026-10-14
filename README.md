@@ -102,3 +102,26 @@ aws cloudformation deploy --region ap-northeast-1 \
 > 失敗するとスタックが残ります。changeset 作成前の失敗ではリソース 0 個の
 > `REVIEW_IN_PROGRESS`、実行中の失敗では `ROLLBACK_COMPLETE` になり、どちらも更新不可なので
 > `aws cloudformation delete-stack --stack-name github-oidc-s3-practice-dev` で削除します。
+
+#### 管理者権限で実行するには（`ntcs-wan` 以外で実行する）
+
+方法A・方法B はいずれも `iam:UpdateAssumeRolePolicy` / `iam:CreateRole` を必要とし、
+`ntcs-wan` は `NTCSDevGuardrailDenyPolicy` により Deny されるため**どちらも実行できません**
+（`--profile wangyu-mfa` の実体は `ntcs-wan` なので、付け替えても結果は同じです）。
+
+本アカウントには SSO の `AdministratorAccess` ロール（`AWSReservedSSO_AdministratorAccess_*`、
+`AdministratorAccess` ポリシー付き・PermissionsBoundary 無し）が存在します。SSO の権限セットで
+`AdministratorAccess` が割り当てられている場合は、管理者プロファイルを作成して実行します。
+
+```
+aws configure sso --profile admin   # アカウント 646977526034 / ロール AdministratorAccess を選択
+aws sso login --profile admin
+aws cloudformation deploy --region ap-northeast-1 \
+  --stack-name github-oidc-s3-practice-dev \
+  --template-file iam/github-oidc-role.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides EnvironmentName=dev CreateOidcProvider=false \
+  --profile admin
+```
+
+SSO の権限が無い場合は、管理者ユーザーに `iam/README.md` の手順（方法A）をそのまま渡してください。
