@@ -87,8 +87,18 @@ aws cloudformation deploy --region ap-northeast-1 \
 ```
 
 > このコマンドは `AWS::IAM::Role` の作成を伴うため `iam:CreateRole` が必要です。
-> `ntcs-wan` は `NTCSDevGuardrailDenyPolicy` の `DenyUserAndGroupManagement` により
-> `iam:CreateRole` が Deny されているため、**管理者ユーザーで実行**してください。
+> `ntcs-wan` で実行すると `DeployRole`（`AWS::IAM::Role`）が次の理由で `CREATE_FAILED` になります。
 >
-> changeset 作成に失敗するとリソース 0 個のスタックが `REVIEW_IN_PROGRESS` で残ります。
-> `aws cloudformation delete-stack --stack-name github-oidc-s3-practice-dev` で削除できます。
+> ```
+> User: arn:aws:iam::646977526034:user/ntcs-wan is not authorized to perform: iam:CreateRole
+> on resource: arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy-dev
+> with an explicit deny in an identity-based policy:
+> arn:aws:iam::646977526034:policy/NTCSDevGuardrailDenyPolicy
+> ```
+>
+> これは `NTCSDevGuardrailDenyPolicy` の `DenyUserAndGroupManagement` によるもので、
+> **管理者ユーザーで実行**してください。
+>
+> 失敗するとスタックが残ります。changeset 作成前の失敗ではリソース 0 個の
+> `REVIEW_IN_PROGRESS`、実行中の失敗では `ROLLBACK_COMPLETE` になり、どちらも更新不可なので
+> `aws cloudformation delete-stack --stack-name github-oidc-s3-practice-dev` で削除します。
