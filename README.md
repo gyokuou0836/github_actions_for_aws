@@ -21,13 +21,13 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
 ## 事前準備
 `ntcs-wan` にはIAM権限が無いため、ロールは管理者権限を持つ別ユーザーが作成する（Webコンソール手順でも可）。信頼ポリシーの `sub` は GitHub OIDC の immutable ID 形式（`repo:<owner>@<owner-id>/<repository>@<repository-id>:environment:<環境名>`）に合わせる。現在の既定値では dev は `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev`。異なるリポジトリを使う場合はテンプレートの owner/repository 名と ID を変更する。
 
-1. 環境ごとにロール作成（OIDCプロバイダは最初の1回のみ作成。2回目以降は `CreateOidcProvider=false`）
+1. 環境ごとにロール作成（OIDCプロバイダはアカウントに1つ。本アカウントには既に `token.actions.githubusercontent.com` が存在するため `CreateOidcProvider=false` を指定）
    ```
    aws cloudformation deploy --region ap-northeast-1 \
      --stack-name github-oidc-s3-practice-dev \
      --template-file iam/github-oidc-role.yaml \
      --capabilities CAPABILITY_NAMED_IAM \
-     --parameter-overrides EnvironmentName=dev
+     --parameter-overrides EnvironmentName=dev CreateOidcProvider=false
    ```
    出力 `RoleArn` を控える。
    既存のロールが旧形式の `sub`（`repo:<owner>/<repository>:environment:<環境名>`）を信頼している場合、このリポジトリのように GitHub が immutable ID 形式の `sub` を発行していることを確認してから、このテンプレートでスタックを更新する。immutable subject に移行していない既存リポジトリは引き続き旧形式を発行するため、先に GitHub 側で移行するか、移行中は両形式を信頼してから旧形式を削除する。
@@ -61,3 +61,34 @@ repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
 > ワークフローの「Debug OIDC Token Claims」「Show Expected OIDC Subject」ステップで、
 > 実際に発行された `sub` と信頼ポリシーが必要とする `sub` をログで比較できます
 > （切り分けが完了したら削除して構いません）。
+
+### `Failed to create the changeset: ... AWS::EarlyValidation::ResourceExistenceCheck ... FAILED`
+
+`iam/github-oidc-role.yaml` を `cloudformation deploy` した際にこのエラーが出る場合、
+パラメータ `CreateOidcProvider` が既定値 `true` のままで、既存の OIDC プロバイダと
+**名前衝突**しています。`aws cloudformation describe-events` で次のように確認できます。
+
+```
+ValidationName: NAME_CONFLICT_VALIDATION
+LogicalResourceId: GitHubOidcProvider (AWS::IAM::OIDCProvider)
+"Resource of type 'AWS::IAM::OIDCProvider' with identifier
+ 'arn:aws:iam::646977526034:oidc-provider/token.actions.githubusercontent.com' already exists."
+```
+
+OIDC プロバイダはアカウントに 1 つしか作成できないため、既に存在する場合は
+`CreateOidcProvider=false` を指定します（`iam/README.md` の「方法B」も同様）。
+
+```
+aws cloudformation deploy --region ap-northeast-1 \
+  --stack-name github-oidc-s3-practice-dev \
+  --template-file iam/github-oidc-role.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides EnvironmentName=dev CreateOidcProvider=false
+```
+
+> このコマンドは `AWS::IAM::Role` の作成を伴うため `iam:CreateRole` が必要です。
+> `ntcs-wan` は `NTCSDevGuardrailDenyPolicy` の `DenyUserAndGroupManagement` により
+> `iam:CreateRole` が Deny されているため、**管理者ユーザーで実行**してください。
+>
+> changeset 作成に失敗するとリソース 0 個のスタックが `REVIEW_IN_PROGRESS` で残ります。
+> `aws cloudformation delete-stack --stack-name github-oidc-s3-practice-dev` で削除できます。
