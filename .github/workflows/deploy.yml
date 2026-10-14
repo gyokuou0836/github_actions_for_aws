@@ -27,8 +27,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install cfn-lint
@@ -43,8 +43,8 @@ jobs:
     env:
       TARGET_ENV: ${{ inputs.environment || (github.ref_name == 'deploy_stg' && 'staging') || 'dev' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install boto3
@@ -84,7 +84,7 @@ jobs:
           echo "  ※ 上の Debug ステップの sub と一致しない場合は sts:AssumeRoleWithWebIdentity が失敗します"
           echo "  ※ 手順: iam/README.md"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
