@@ -74,7 +74,7 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
 |---|---|
 | 付与済み権限 | CFN `stack/s3-practice-dev/*` の `CreateStack` / `UpdateStack` / `DescribeStacks` / `DescribeStackEvents` / `GetTemplate`、`ValidateTemplate`、S3 `ntcs-wan-s3-practice*` の Create/Put/Get/List |
 | `scripts/deploy.py` が使う操作 | `DescribeStacks` → `CreateStack` / `UpdateStack` → `DescribeStacks`（waiter）: すべて付与済み |
-| ⚠️ 注意 | ポリシーのスタック対象は **`s3-practice-dev` のみ**。`workflow_dispatch` で `staging`/`prod` を選ぶとスタック操作の権限が無く失敗します（使う場合は管理者にポリシー追加を依頼） |
+| ⚠️ 注意 | ポリシーのスタック対象は **`s3-practice-dev` のみ**。`workflow_dispatch` で `staging`/`prod` を選ぶとスタック操作の権限が無く失敗します。さらに方法Aの信頼ポリシーは `dev`/`staging` のみを許可するため、`prod` はロール引受けの時点でも失敗します（使う場合は `prod` の immutable `sub` とスタック権限の両方を管理者に追加依頼） |
 
 ## 流れ
 `feature/wangyu` で編集 → `deploy_dev` へPR → Merge → Actionsがdevスタックを更新
