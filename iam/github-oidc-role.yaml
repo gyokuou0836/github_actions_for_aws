@@ -10,19 +10,28 @@ Parameters:
   GitHubOwnerId:
     Type: String
     Default: '5299457'
-    Description: Immutable GitHub owner ID included in the OIDC subject
+    Description: >-
+      Immutable GitHub owner (account) ID included in the OIDC subject.
+      Identical for every repository under this account and for every
+      environment/branch, so it never changes when adding an environment.
   GitHubRepository:
     Type: String
     Default: github_actions_for_aws
   GitHubRepositoryId:
     Type: String
     Default: '1416525375'
-    Description: Immutable GitHub repository ID included in the OIDC subject
+    Description: >-
+      Immutable GitHub repository ID included in the OIDC subject.
+      Identical for every environment/branch; only the environment:<name>
+      suffix differs per environment.
   EnvironmentName:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
-    Description: GitHub Environment name (one role per environment)
+    Description: >-
+      GitHub Environment name (one role per environment). The immutable subject
+      for this environment is
+      repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:<EnvironmentName>.
   BucketNamePrefix:
     Type: String
     Default: ntcs-wan-s3-practice

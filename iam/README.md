@@ -56,6 +56,20 @@
 > `github-oidc-role.yaml` が作成する `github-actions-s3-practice-deploy-${EnvironmentName}` とは **別名**なので、
 > テンプレートを新規デプロイすると **別のロールが増える** 点に注意してください（下記「方法B」参照）。
 
+### `sub` の可変部分は「環境」だけ（ID は固定）
+
+`sub` の `@5299457`（**アカウント ID**）と `@1416525375`（**リポジトリ ID**）は GitHub が発行する
+**不変識別子**で、**環境・ブランチ・リネームでは変わりません**。変わるのは末尾の `environment:<env>` 部分だけです。
+
+| 環境 | `sub` |
+|---|---|
+| `dev` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| `staging` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:staging` |
+| （未追加）`prod` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:prod` |
+
+→ **環境を増やすときは、その環境の行を信頼ポリシーの配列に 1 行追加するだけ**で、ID の書き換えは不要です。
+ID が変わるのは**別アカウントへのリポジトリ移転（transfer）や fork** をした場合のみです。
+
 ## 足りない権限の整理（`ntcs-wan` が実施できない操作）
 
 ### `ntcs-wan` にアタッチされているポリシー

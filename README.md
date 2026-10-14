@@ -89,6 +89,33 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
 repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev
 ```
 
+この `sub` のうち **`@5299457`（オーナー/アカウント ID）と `@1416525375`（リポジトリ ID）は固定値**です。
+**環境やブランチによって変わるのは最後の `:` 以降だけ**で、どちらの ID も GitHub が発行する不変識別子です。
+
+| 部分 | 値 | 環境ごとに変わるか |
+|---|---|---|
+| `gyokuou0836@5299457` | オーナー名 @ **アカウント ID**（このアカウント配下の全リポジトリで共通） | ❌ 変わらない |
+| `github_actions_for_aws@1416525375` | リポジトリ名 @ **リポジトリ ID**（GitHub 全体で一意） | ❌ 変わらない |
+| `:environment:dev` | ジョブの Environment（`deploy.yml` の `environment:`） | ✅ **ここだけ変わる** |
+
+| 実行 | 期待される `sub` |
+|---|---|
+| `deploy_dev` へ push（Environment `dev`） | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| `deploy_stg` へ push（Environment `staging`） | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:staging` |
+| `workflow_dispatch` で `prod` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:prod` |
+| Environment を使わないジョブ | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:ref:refs/heads/deploy_dev` |
+
+> ワークフローの `Show Expected OIDC Subject` ステップは `github.repository_owner_id` /
+> `github.repository_id`（＝上記の固定 ID）をそのまま使い、`environment:` の部分だけを環境名で組み立てています。
+> リポジトリ名やアカウント名を**リネームしても ID は変わりません**（変わるのは名前の部分だけ）。
+> ID が変わるのは **別アカウントへのリポジトリ移転（transfer）や fork** をした場合です。
+
+ID は認証不要の GitHub API でも確認できます（2026-10-14 実測: オーナー `5299457` / リポジトリ `1416525375`）。
+
+```bash
+curl -s https://api.github.com/repos/gyokuou0836/github_actions_for_aws | grep -E '"id"|"login"'
+```
+
 ロールの信頼ポリシーが旧形式（`repo:gyokuou0836/github_actions_for_aws:*` など）のままだと
 `sub` が一致せず AssumeRole に失敗します。実環境のロール ARN・現在の信頼ポリシー・更新手順は
 [`iam/README.md`](iam/README.md) を参照してください。
