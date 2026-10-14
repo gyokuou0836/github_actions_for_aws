@@ -83,6 +83,7 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
 ## デプロイ結果（実測）
 
 2026-10-14 の初回デプロイは**成功**しました（信頼ポリシー更新後に Re-run して確認）。
+続く 2 回目の実行で「バケットが既に存在する状態での再実行」も検証済みです（後述の「再実行の実測」）。
 
 | 項目 | 値 |
 |---|---|
@@ -101,6 +102,20 @@ aws cloudformation describe-stack-events --stack-name s3-practice-dev --region a
   --profile wangyu-mfa --max-items 5
 aws s3api head-bucket --bucket ntcs-wan-s3-practice-wangyu-526034 --profile wangyu-mfa
 ```
+
+### 再実行の実測（2026-10-14・2 回目）
+
+PR #6 をマージして `deploy` を再実行し、**バケットが既に存在する状態**での挙動を実測しました。
+
+| 項目 | 値 |
+|---|---|
+| 実行 | [run 38508932886](https://github.com/gyokuou0836/github_actions_for_aws/actions/runs/38508932886)（`deploy_dev` への push / head `8076e66`）/ conclusion **`success`** |
+| OIDC | `sub = repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` → `Authenticated as assumedRoleId AROAZNIW5TEJDAH7ZFEKH:GitHubActions` |
+| デプロイ結果 | `Deploy stack` ステップの出力は **`No changes.`**（CloudFormation が `No updates are to be performed` を返し、`scripts/deploy.py` が吸収して正常終了） |
+| スタック | `CREATE_COMPLETE` のまま。`LastUpdatedTime` は `null`（＝更新は何も適用されていない） |
+| バケット | `arn:aws:s3:::ntcs-wan-s3-practice-wangyu-526034` のまま。**再作成なし** |
+| 使用アクション | `actions/checkout@v7` / `actions/setup-python@v7` / `aws-actions/configure-aws-credentials@v6`（ログのステップ名で確認） |
+| Node 20 警告 | **出力されず**（ログ全文に `Node.js 20` / `deprecated` の文字列なし） |
 
 ### 再実行（Re-run）したときの挙動
 
@@ -275,4 +290,6 @@ Node 24 上で**強制実行**され、その旨が通知されます（動作�
 
 更新後もバケット／スタックの状態は変わりません（`scripts/deploy.py` が
 `No updates are to be performed` を `No changes.` として正常終了させるため）。
+[run 38508932886](https://github.com/gyokuou0836/github_actions_for_aws/actions/runs/38508932886) で実測済み:
+Node 20 警告は出力されず、`Deploy stack` は `No changes.` で終了しました。
 
