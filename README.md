@@ -37,6 +37,45 @@ PR時は `validate` ジョブのみ（テンプレート検証）。
    - Deployment branches: dev=`deploy_dev`、staging=`deploy_stg`、prod=承認者(Required reviewers)を設定推奨
    ※PR時の検証は `cfn-lint` を使用するため、Repository Secretの登録は不要です。
 
+## 事前準備チェックリスト（PR → デプロイ実行）
+
+デプロイを実行する前に次を確認します。`ntcs-wan` は AWS 側（IAM）の設定を変更できないため、
+**信頼ポリシーの修正は管理者の作業完了が前提**です。
+
+### AWS 側（管理者が実施）
+
+- [ ] ロール `github-actions-s3-practice-deploy` の信頼ポリシーが immutable 形式（`@5299457` / `@1416525375` 付き）
+      — 未実施のまま実行すると `configure-aws-credentials` で `Not authorized to perform sts:AssumeRoleWithWebIdentity` になります
+- [ ] 確認コマンド: `aws iam get-role --role-name github-actions-s3-practice-deploy --query 'Role.AssumeRolePolicyDocument'`
+
+### GitHub 側（リポジトリ設定）
+
+- [ ] Environment `dev` が存在する（`staging` / `prod` を使う場合も同様に作成）
+- [ ] Environment `dev` の **Secret** `AWS_ROLE_ARN` = `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy`
+      （**環境サフィックス無し**。`...-dev` を設定すると存在しないロールを指します）
+- [ ] Environment `dev` の **Variable** `BUCKET_NAME`（ワークフローは `vars.BUCKET_NAME` を参照。Secret ではない）
+      — `ntcs-wan-s3-practice` で始め、S3 全体で一意にする（ロール権限が `arn:aws:s3:::ntcs-wan-s3-practice*` のため）
+- [ ] Environment `dev` の Deployment branches に `deploy_dev` を許可（ブランチ制限を掛けている場合）
+- [ ] Environment `dev` に Required reviewers を設定している場合は、実行後に承認する
+- [ ] Settings → Actions → General で Actions が有効（`id-token: write` はワークフロー内で宣言済み）
+
+### 実行の挙動（つまずきやすい点）
+
+| 操作 | 走るジョブ | 理由 |
+|---|---|---|
+| PR 作成（`feature/wangyu` → `deploy_dev`） | **なし** | `pull_request` の `paths` は `cfn/**` のみ。ドキュメントだけの PR にはチェックが付かない |
+| PR をマージ（`deploy_dev` へ push） | `deploy`（environment=`dev`） | `push` の `paths` に `.github/workflows/deploy.yml` が含まれ、マージ差分で `deploy.yml` が変わるため |
+| 「Re-run」ボタン | — | PR では実行が無いため、マージ後まで使えない |
+| 手動実行（Run workflow） | `deploy` | Actions → deploy → Run workflow → environment で `dev` を選択。ブランチは `deploy_dev` を選ぶ（Deployment branches の許可対象にするため） |
+
+### ロール権限との整合（確認済み）
+
+| 項目 | 内容 |
+|---|---|
+| 付与済み権限 | CFN `stack/s3-practice-dev/*` の `CreateStack` / `UpdateStack` / `DescribeStacks` / `DescribeStackEvents` / `GetTemplate`、`ValidateTemplate`、S3 `ntcs-wan-s3-practice*` の Create/Put/Get/List |
+| `scripts/deploy.py` が使う操作 | `DescribeStacks` → `CreateStack` / `UpdateStack` → `DescribeStacks`（waiter）: すべて付与済み |
+| ⚠️ 注意 | ポリシーのスタック対象は **`s3-practice-dev` のみ**。`workflow_dispatch` で `staging`/`prod` を選ぶとスタック操作の権限が無く失敗します（使う場合は管理者にポリシー追加を依頼） |
+
 ## 流れ
 `feature/wangyu` で編集 → `deploy_dev` へPR → Merge → Actionsがdevスタックを更新
 
