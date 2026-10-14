@@ -18,6 +18,7 @@
 | 対象ロール | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` |
 | 依頼内容 | 信頼ポリシーの `token.actions.githubusercontent.com:sub` 条件を **immutable 形式**に更新（**変更は 1 箇所・所要 5 分**） |
 | 理由 | GitHub Actions のデプロイが `sts:AssumeRoleWithWebIdentity` で AccessDenied |
+| 証跡 | Actions ログの実測 `sub` が期待値と**一致**（`repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev`）。不一致は**信頼ポリシーの `sub` のみ**（`repo:gyokuou0836/github_actions_for_aws:*`） |
 | 代行不可の理由 | `ntcs-wan` は `NTCSDevGuardrailDenyPolicy`（`DenyTrustRelationshipTampering`）により `iam:UpdateAssumeRolePolicy` が Deny（詳細は下記「足りない権限の整理」） |
 | 実施方法 | 下記「修正手順 → 方法A」 |
 | 完了条件 | 下記「検証」のコマンドで immutable 形式の `sub` を確認 |
@@ -33,7 +34,7 @@
 | OIDC プロバイダ | `arn:aws:iam::646977526034:oidc-provider/token.actions.githubusercontent.com`（存在・`ClientIDList=[sts.amazonaws.com]`） |
 | デプロイロール | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` |
 | ロールにアタッチ済み | `github-actions-s3-practice-deploy-policy`（マネージドポリシー） |
-| このリポジトリが発行する `sub` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| このリポジトリが発行する `sub` | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev`（**実測確認済み**: Actions の `Debug OIDC Token Claims` ステップの実トークン） |
 
 > ⚠️ 実ロール名は **環境サフィックス無し** の `github-actions-s3-practice-deploy` です。
 > `github-oidc-role.yaml` が作成する `github-actions-s3-practice-deploy-${EnvironmentName}` とは **別名**なので、
@@ -107,9 +108,20 @@
 
 ## 症状
 
+GitHub Actions の `deploy` ジョブが `aws-actions/configure-aws-credentials@v4` で失敗します（2026-10-14 実行分で実測）。
+
 ```
-Error: Not authorized to perform sts:AssumeRoleWithWebIdentity
+Error: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity
 ```
+
+| 実測した証跡 | 値 |
+|---|---|
+| トークンの `sub`（`Debug OIDC Token Claims` ステップ） | `repo:gyokuou0836@5299457/github_actions_for_aws@1416525375:environment:dev` |
+| ワークフローが期待する `sub`（`Show Expected OIDC Subject` ステップ） | 上と **一致** |
+| 信頼ポリシーの `sub`（`aws iam get-role`） | `repo:gyokuou0836/github_actions_for_aws:*`（**不一致**） |
+
+→ OIDC プロバイダ（`aud=sts.amazonaws.com`）・Environment `dev`・Secret `AWS_ROLE_ARN`・ワークフローはすべて正常で、
+**信頼ポリシーの `sub` だけが原因**であることを確認済みです。
 
 ## 原因
 
