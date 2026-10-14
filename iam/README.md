@@ -18,7 +18,7 @@
 | 対象ロール | `arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy` |
 | 依頼内容 | 信頼ポリシーの `token.actions.githubusercontent.com:sub` 条件を **immutable 形式**に更新（**変更は 1 箇所・所要 5 分**） |
 | 理由 | GitHub Actions のデプロイが `sts:AssumeRoleWithWebIdentity` で AccessDenied |
-| 代行不可の理由 | `ntcs-wan` は `NTCSDevGuardrailDenyPolicy`（`DenyTrustRelationshipTampering`）により `iam:UpdateAssumeRolePolicy` が Deny |
+| 代行不可の理由 | `ntcs-wan` は `NTCSDevGuardrailDenyPolicy`（`DenyTrustRelationshipTampering`）により `iam:UpdateAssumeRolePolicy` が Deny（詳細は下記「足りない権限の整理」） |
 | 実施方法 | 下記「修正手順 → 方法A」 |
 | 完了条件 | 下記「検証」のコマンドで immutable 形式の `sub` を確認 |
 
@@ -39,14 +39,71 @@
 > `github-oidc-role.yaml` が作成する `github-actions-s3-practice-deploy-${EnvironmentName}` とは **別名**なので、
 > テンプレートを新規デプロイすると **別のロールが増える** 点に注意してください（下記「方法B」参照）。
 
-## `ntcs-wan` では修正できない理由
+## 足りない権限の整理（`ntcs-wan` が実施できない操作）
 
-`ntcs-wan` にアタッチされている `NTCSDevGuardrailDenyPolicy` に次の明示 Deny があります。
+### `ntcs-wan` にアタッチされているポリシー
 
-- `DenyTrustRelationshipTampering`: `iam:UpdateAssumeRolePolicy` を `Resource: *` で Deny
-- `DenyUserAndGroupManagement`: `iam:CreateRole` / `iam:DeleteRole` を Deny
+| ポリシー | 本件での役割 |
+|---|---|
+| `NTCSDevIAMAllowPolicy` | IAM の許可（読み取り全般＋`gijiko-*` に限定した管理操作） |
+| `NTCSDevGuardrailDenyPolicy` | **明示 Deny**（アタッチポリシー兼 PermissionsBoundary） |
+| `NTCSBusinessServicesPolicy` | CFN / S3 / EC2 等の許可（`ap-northeast-1`・`ap-northeast-3` のみ） |
+| `MFASelfManagePolicy` / `IAMUserChangePassword` / `AmazonQDeveloperAccess` | 本件と無関係 |
 
-そのため **信頼ポリシーの変更およびロール作成は管理者ユーザー等の権限で実施**してください。
+インラインポリシーは 0 件です。`iam:SimulatePrincipalPolicy` も許可されていないため、
+各アクションの可否は上記ポリシー文との突き合わせで判定しています。
+
+### 方法A で不足している権限（★ご依頼対象）
+
+| # | 操作 | 必要なアクション | `ntcs-wan` | 根拠 |
+|---|---|---|---|---|
+| A-1 | 信頼ポリシーの更新 | `iam:UpdateAssumeRolePolicy` | ❌ 不可 | `DenyTrustRelationshipTampering`（`Resource:*`・条件なし）／Allow も無し |
+| A-2 | 更新前後の確認 | `iam:GetRole` | ✅ 可 | `AllowIAMRead`（`iam:Get*`） |
+
+**不足は `iam:UpdateAssumeRolePolicy` の 1 アクションのみ**です。
+
+### 方法B で不足している権限（参考・今回は依頼しません）
+
+| # | 操作 | 必要なアクション | `ntcs-wan` | 根拠 |
+|---|---|---|---|---|
+| B-1 | ロール作成 | `iam:CreateRole` | ❌ 不可 | `DenyUserAndGroupManagement`（`Resource:*`・条件なし）／Allow も無し |
+| B-2 | ロールへのタグ付与 | `iam:TagRole` | ❌ 不可 | Allow 無し（CloudFormation が自動付与） |
+| B-3 | インラインポリシー作成 | `iam:PutRolePolicy` | ❌ 不可 | `DenyModifyingNonBoundedRoles`（`iam:PermissionsBoundary` が `NTCSDevBoundary` 以外は Deny） |
+| B-4 | ロールバック時の削除 | `iam:DeleteRole` / `iam:DeleteRolePolicy` | ❌ 不可 | `DenyUserAndGroupManagement` |
+| B-5 | OIDC プロバイダ作成（今回は不要） | `iam:CreateOpenIDConnectProvider` | ❌ 不可 | Allow 無し |
+| B-6 | スタック操作 | `cloudformation:*` | ✅ 可 | `NTCSBusinessServicesPolicy`（対象リージョンのみ） |
+
+不足は **5 アクション**。さらに `NTCSDevGuardrailDenyPolicy` の**条件なし Deny 文を 2 つ書き換える**必要があり、
+ガードレールの恒久的な緩和となります。
+
+### `ntcs-wan` に権限を付与する案を採らない理由
+
+- `DenyTrustRelationshipTampering` と `DenyUserAndGroupManagement` は **条件の無い `Resource:*` の Deny** です。
+  `ntcs-wan` 側に Allow を足しても Deny が優先されるため、**ガードレール本体の改訂が必須**になります
+  （`ntcs-wan` は `DenyModifyingNonGijikoPolicies` により `NTCSDev*` ポリシーを変更できません）。
+- 改訂すると IAM ロール作成・信頼ポリシー改変が広く可能になり、本環境の権限分離（＝社用環境の擬似）が成立しなくなります。
+
+したがって、**不足している 1 アクション（`iam:UpdateAssumeRolePolicy`）を管理者に代行してもらう**方針（方法A）とします。
+
+> あえて `ntcs-wan` に委譲する場合は、`DenyTrustRelationshipTampering` に
+> `"NotResource": ["arn:aws:iam::646977526034:role/github-actions-*"]` を追加し、
+> `DenyUserAndGroupManagement` 側でも同様に除外したうえで、`NTCSDevIAMAllowPolicy` に
+> `iam:CreateRole` / `iam:DeleteRole` / `iam:TagRole` / `iam:PutRolePolicy` を同 ARN で追加する改訂が必要です
+> （実質ガードレールの穴になるため推奨しません）。
+
+### `ntcs-wan`（依頼者側）が自分でできる操作
+
+| 操作 | コマンド等 | 可否 |
+|---|---|---|
+| 現状の確認 | `aws iam get-role --role-name github-actions-s3-practice-deploy` | ✅ 可（`iam:Get*`） |
+| 変更後 JSON の準備 | `trust-policy.json` の作成 | ✅ 可（ローカル作業） |
+| デプロイ（ロール新規作成） | `aws cloudformation deploy ...` | ❌ 不可（B-1〜B-4） |
+| 信頼ポリシーの更新 | `aws iam update-assume-role-policy ...` | ❌ 不可（A-1） |
+| ローカル疎通（ロールを assume） | `aws sts assume-role --role-arn arn:aws:iam::646977526034:role/github-actions-s3-practice-deploy ...` | ❌ 不可（`AllowAssumeTerraformRoles` は `gijiko-*-iam-role-terraform-*` のみ許可） |
+| 権限の自己診断 | `aws iam simulate-principal-policy ...` | ❌ 不可（Allow 無し） |
+
+> デプロイロールの信頼ポリシーには `ntcs-wan` からの `sts:AssumeRole` 文がありますが、
+> `ntcs-wan` 側に許可が無いため実際には assume できません（必要なら別途アクションの許可依頼が必要です）。
 
 ## 症状
 
@@ -189,7 +246,7 @@ aws iam get-role --role-name github-actions-s3-practice-deploy \
 | 影響するロール | `github-actions-s3-practice-deploy` **のみ**（他のロール・ユーザーへの影響なし） |
 | ロール／ポリシーの削除 | なし（信頼ポリシーの 1 プロパティを書き換えるのみ） |
 | アタッチ済みポリシー | 変更なし（`github-actions-s3-practice-deploy-policy`） |
-| 既存アクセスへの影響 | ローカル検証用の `ntcs-wan` の `sts:AssumeRole` 文は **維持**するため影響なし |
+| 既存アクセスへの影響 | `ntcs-wan` の `sts:AssumeRole` 文は **維持**するため影響なし（`ntcs-wan` 側に `sts:AssumeRole` の許可が無いため現状 assume 実績なし） |
 | ロールバック | 手順 1 の `trust-policy.backup.json` を `--policy-document file://trust-policy.backup.json` で再適用すれば即時復元 |
 | ダウンタイム | なし（更新は即時反映） |
 

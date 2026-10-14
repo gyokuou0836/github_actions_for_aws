@@ -103,25 +103,29 @@ aws cloudformation deploy --region ap-northeast-1 \
 > `REVIEW_IN_PROGRESS`、実行中の失敗では `ROLLBACK_COMPLETE` になり、どちらも更新不可なので
 > `aws cloudformation delete-stack --stack-name github-oidc-s3-practice-dev` で削除します。
 
-#### 管理者権限で実行するには（`ntcs-wan` 以外で実行する）
+#### `ntcs-wan` のまま進める場合（IAM 変更だけを管理者に依頼する）
 
-方法A・方法B はいずれも `iam:UpdateAssumeRolePolicy` / `iam:CreateRole` を必要とし、
-`ntcs-wan` は `NTCSDevGuardrailDenyPolicy` により Deny されるため**どちらも実行できません**
-（`--profile wangyu-mfa` の実体は `ntcs-wan` なので、付け替えても結果は同じです）。
+本リポジトリは「権限を絞られた開発者が、IAM の変更だけを管理者に依頼する」社用環境を擬似します。
+`ntcs-wan` は必要な権限を持たないため、**依頼者側の作業はここで止め、次の内容を管理者に渡します**。
 
-本アカウントには SSO の `AdministratorAccess` ロール（`AWSReservedSSO_AdministratorAccess_*`、
-`AdministratorAccess` ポリシー付き・PermissionsBoundary 無し）が存在します。SSO の権限セットで
-`AdministratorAccess` が割り当てられている場合は、管理者プロファイルを作成して実行します。
+| # | 依頼内容 | 根拠 |
+|---|---|---|
+| 1 | 既存ロール `github-actions-s3-practice-deploy` の信頼ポリシー更新（方法A） | `iam:UpdateAssumeRolePolicy` が Deny（`DenyTrustRelationshipTampering`） |
+| 2 | （任意）`github-oidc-role.yaml` によるロール作成（方法B） | `iam:CreateRole` ほか計 5 アクションが Deny／Allow 無し |
+
+必要なアクションの洗い出し・差分 JSON・影響範囲・検証手順は
+[`iam/README.md`](iam/README.md) の「提出用サマリ」「足りない権限の整理」にまとめてあります。
+チケットには「提出用サマリ」のブロックをそのまま貼り付けられます。
+
+管理者側がコマンドで実施する場合（管理者が SSO の `AdministratorAccess` を使える場合）の例:
 
 ```
 aws configure sso --profile admin   # アカウント 646977526034 / ロール AdministratorAccess を選択
 aws sso login --profile admin
-aws cloudformation deploy --region ap-northeast-1 \
-  --stack-name github-oidc-s3-practice-dev \
-  --template-file iam/github-oidc-role.yaml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides EnvironmentName=dev CreateOidcProvider=false \
-  --profile admin
+aws iam update-assume-role-policy --role-name github-actions-s3-practice-deploy \
+  --policy-document file://trust-policy.json --profile admin
 ```
 
-SSO の権限が無い場合は、管理者ユーザーに `iam/README.md` の手順（方法A）をそのまま渡してください。
+> `ntcs-wan` に権限を追加して解決する案は採りません。`NTCSDevGuardrailDenyPolicy` の
+> 条件なし Deny を緩める必要があり、本リポジトリの前提（権限分離の擬似）が崩れるためです
+> （詳細は `iam/README.md` の「`ntcs-wan` に権限を付与する案を採らない理由」を参照）。
